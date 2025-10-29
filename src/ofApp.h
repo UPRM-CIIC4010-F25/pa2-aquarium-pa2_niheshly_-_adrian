@@ -41,4 +41,5 @@ class ofApp : public ofBaseApp{
 		std::unique_ptr<GameSceneManager> gameManager;
 		std::shared_ptr<AquariumSpriteManager>spriteManager;
 		
+		ofSoundPlayer backgroundSound;   //ambient underwater loop
 };
