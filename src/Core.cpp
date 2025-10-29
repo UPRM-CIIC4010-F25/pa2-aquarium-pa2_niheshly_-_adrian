@@ -48,7 +48,21 @@ void GameEvent::print() const {
 
 // collision detection between two creatures
 bool checkCollision(std::shared_ptr<Creature> a, std::shared_ptr<Creature> b) {
+    if (a == nullptr || b == nullptr) {
     return false; 
+}
+
+// distance between the two centers
+float dx = a->getX() - b->getX();
+float dy = a->getY() - b->getY();
+float distSq = dx * dx + dy * dy;
+
+// seeing how close they are "allowed" to be by adding the radii
+float combinedRadius = a->getCollisionRadius() + b->getCollisionRadius();
+float radiusSq = combinedRadius * combinedRadius;
+
+// consider it a collision if distance^2 <= (r1+r2)^2
+return distSq <= radiusSq;
 };
 
 

@@ -141,6 +141,8 @@ class GameEvent {
 
 
 bool checkCollision(std::shared_ptr<Creature> a, std::shared_ptr<Creature> b);
+// Returns true if two creatures are touching based on their collision radii.
+// We treat each creature as a circle using its (x,y) position as center.
 
 
 class GameLevel {
