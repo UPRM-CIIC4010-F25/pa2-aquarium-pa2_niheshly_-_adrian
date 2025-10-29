@@ -12,7 +12,29 @@ void Creature::normalize() {
 }
 
 void Creature::bounce() {
-    // should implement boundary controls here
+    // Left wall
+    if (m_x < 0) {
+        m_x = 0;
+        m_dx = std::abs(m_dx);   //start moving right
+    }
+
+    //Right wall
+    if (m_x > m_width) {
+        m_x = m_width;
+        m_dx = -std::abs(m_dx);   //start moving left
+    }
+
+    //Top wall
+    if (m_y < 0) {
+        m_y = 0;
+        m_dy = std::abs(m_dy);   //move down
+    }
+
+    //Bottom wall
+    if (m_y > m_height) {
+        m_y = m_height;
+        m_dy = -std::abs(m_dy);   //move up
+    }
 }
 
 

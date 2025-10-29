@@ -99,7 +99,7 @@ public:
 
     void setBounds(int w, int h);
     void normalize();
-    void bounce();
+    void bounce();   //Keeps creature inside the aquarium area and flips direction when it hits a wall.
 };
 
 // GameEvents
