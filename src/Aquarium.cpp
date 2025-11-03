@@ -495,52 +495,21 @@ bool AquariumLevel::isCompleted(){
     return this->m_level_score >= this->m_targetScore;
 }
 
-
-
-
-std::vector<AquariumCreatureType> Level_0::Repopulate() {
-    std::vector<AquariumCreatureType> toRepopulate;
-    for(std::shared_ptr<AquariumLevelPopulationNode> node : this->m_levelPopulation){
-        int delta = node->population - node->currentPopulation;
-        ofLogVerbose() << "to Repopulate :  " << delta << endl;
-        if(delta >0){
-            for(int i = 0; i<delta; i++){
-                toRepopulate.push_back(node->creatureType);
-            }
-            node->currentPopulation += delta;
+//repopulation
+std::vector<AquariumCreatureType> AquariumLevel::Repopulate() {
+    std::vector<AquariumCreatureType> creaturesToSpawn;
+    
+    for (auto& node : m_levelPopulation) {
+        if (node->currentPopulation < node->population) {
+            creaturesToSpawn.push_back(node->creatureType);
+            node->currentPopulation++;
         }
     }
-    return toRepopulate;
-
+    
+    return creaturesToSpawn;
 }
 
-std::vector<AquariumCreatureType> Level_1::Repopulate() {
-    std::vector<AquariumCreatureType> toRepopulate;
-    for(std::shared_ptr<AquariumLevelPopulationNode> node : this->m_levelPopulation){
-        int delta = node->population - node->currentPopulation;
-        if(delta >0){
-            for(int i=0; i<delta; i++){
-                toRepopulate.push_back(node->creatureType);
-            }
-            node->currentPopulation += delta;
-        }
-    }
-    return toRepopulate;
-}
 
-std::vector<AquariumCreatureType> Level_2::Repopulate() {
-    std::vector<AquariumCreatureType> toRepopulate;
-    for(std::shared_ptr<AquariumLevelPopulationNode> node : this->m_levelPopulation){
-        int delta = node->population - node->currentPopulation;
-        if(delta >0){
-            for(int i=0; i<delta; i++){
-                toRepopulate.push_back(node->creatureType);
-            }
-            node->currentPopulation += delta;
-        }
-    }
-    return toRepopulate;
-}
 //power up implementation
 PowerUp::PowerUp(float x, float y, float radius, std::unique_ptr<IPowerUpEffect> effect)
     : m_x(x), m_y(y), m_radius(radius), m_active(true), m_effect(std::move(effect)) {}
