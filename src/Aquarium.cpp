@@ -15,7 +15,9 @@ string AquariumCreatureTypeToString(AquariumCreatureType t){
 
 // PlayerCreature Implementation
 PlayerCreature::PlayerCreature(float x, float y, int speed, std::shared_ptr<GameSprite> sprite)
-: Creature(x, y, speed, 10.0f, 1, sprite) {}
+: Creature(x, y, speed, 10.0f, 1, sprite),
+ m_baseSpeed(speed),
+ m_scoreMultiplier(1) {}
 
 
 void PlayerCreature::setDirection(float dx, float dy) {
@@ -278,6 +280,10 @@ void AquariumGameScene::Update(){
     std::shared_ptr<GameEvent> event;
 
     this->m_player->update();
+    this->m_player->updatePowerUpEffects();
+    this->m_player->clearExpiredEffects();
+
+    this->m_aquarium->updatePowerUps(this->m_player);
 
     if (this->updateControl.tick()) {
         event = DetectAquariumCollisions(this->m_aquarium, this->m_player);
@@ -294,8 +300,14 @@ void AquariumGameScene::Update(){
                     }
                 }
                 else{
+
+                    this->m_aquarium->spawnRandomPowerUp(event->creatureB->getX(), event->creatureB->getY());
+
                     this->m_aquarium->removeCreature(event->creatureB);
-                    this->m_player->addToScore(1, event->creatureB->getValue());
+
+                    int scoreValue = event->creatureB->getValue() * this->m_player->getScoreMultiplier();
+
+                    this->m_player->addToScore(1, scoreValue);
                     if (this->m_player->getScore() % 25 == 0){
                         this->m_player->increasePower(1);
                         ofLogNotice() << "Player power increased to " << this->m_player->getPower() << "!" << std::endl;
@@ -318,6 +330,9 @@ void AquariumGameScene::Draw() {
     this->m_player->draw();
     this->m_aquarium->draw();
     this->paintAquariumHUD();
+    this->m_aquarium->drawPowerUps();
+
+
 
 }
 
@@ -327,6 +342,13 @@ void AquariumGameScene::paintAquariumHUD(){
     ofDrawBitmapString("Score: " + std::to_string(this->m_player->getScore()), panelWidth, 20);
     ofDrawBitmapString("Power: " + std::to_string(this->m_player->getPower()), panelWidth, 30);
     ofDrawBitmapString("Lives: " + std::to_string(this->m_player->getLives()), panelWidth, 40);
+
+if (this->m_player->getScoreMultiplier() > 1) {
+        ofSetColor(255, 255, 0); // Yellow for multiplier
+        ofDrawBitmapString("Multiplier: x" + std::to_string(this->m_player->getScoreMultiplier()), panelWidth, 60);
+        ofSetColor(255, 255, 255); // Reset to white
+    }
+
     for (int i = 0; i < this->m_player->getLives(); ++i) {
         ofSetColor(ofColor::red);
         ofDrawCircle(panelWidth + i * 20, 50, 5);
@@ -405,4 +427,205 @@ std::vector<AquariumCreatureType> Level_2::Repopulate() {
         }
     }
     return toRepopulate;
+}
+//power up implementation
+PowerUp::PowerUp(float x, float y, float radius, std::unique_ptr<IPowerUpEffect> effect)
+    : m_x(x), m_y(y), m_radius(radius), m_active(true), m_effect(std::move(effect)) {}
+
+void PowerUp::draw() const {
+    if (!m_active) return;
+    
+//visuals
+    float pulse = sin(ofGetElapsedTimef() * 6.0f) * 2.0f + m_radius;
+    
+    ofSetColor(255, 255, 100, 80);
+    ofDrawCircle(m_x, m_y, pulse + 5);
+    
+    ofSetColor(255, 255, 0);
+    ofDrawCircle(m_x, m_y, m_radius);
+    
+    ofSetColor(255, 255, 150);
+    ofDrawCircle(m_x - m_radius * 0.3f, m_y - m_radius * 0.3f, m_radius * 0.4f);
+    
+}
+void PowerUp::update() {
+    if (m_effect) {
+        m_effect->update();
+    }
+}
+bool PowerUp::checkCollision(std::shared_ptr<PlayerCreature> player) const {
+    if (!m_active || !player) return false;
+
+    float dx = player->getX() - m_x; 
+    float dy = player->getY() - m_y;
+    float distance = sqrt(dx * dx + dy * dy);
+    float collisionDistance = player->getRadius() + m_radius;
+
+    return distance <= collisionDistance;
+}
+void PowerUp::applyToPlayer(std::shared_ptr<PlayerCreature> player) {
+    if (m_effect && player) {
+        player->addPowerUpEffect(std::move(m_effect));
+        m_active = false;
+    }
+}
+PowerUpType PowerUp::getType() const {
+    return m_effect ? m_effect->getType() : PowerUpType::SpeedBoost;
+}
+//speed boost
+SpeedBoostEffect::SpeedBoostEffect(int boostAmount, int duration)
+    : m_boostAmount(boostAmount), m_duration(duration), m_elapsed(0), m_applied(false), m_originalSpeed(0) {}
+
+void SpeedBoostEffect::applyEffect(std::shared_ptr<PlayerCreature> player) {
+    if (!player || m_applied) return;
+    
+    m_originalSpeed = player->getBaseSpeed();
+    player->setTemporarySpeed(m_originalSpeed + m_boostAmount);
+    m_applied = true;
+    ofLogNotice() << "Speed Boost applied! Speed: " << (m_originalSpeed + m_boostAmount);
+}
+void SpeedBoostEffect::removeEffect(std::shared_ptr<PlayerCreature> player) {
+    if (player && m_applied) {
+        player->setTemporarySpeed(m_originalSpeed);
+        ofLogNotice() << "Speed Boost expired. Speed restored to: " << m_originalSpeed;
+    }
+}
+//extra life
+ExtraLifeEffect::ExtraLifeEffect() : m_applied(false) {}
+
+void ExtraLifeEffect::applyEffect(std::shared_ptr<PlayerCreature> player) {
+    if (!player || m_applied) return;
+    
+    player->setLives(player->getLives() + 1);
+    m_applied = true;
+    ofLogNotice() << "Extra Life collected! Total lives: " << player->getLives();
+}
+void ExtraLifeEffect::removeEffect(std::shared_ptr<PlayerCreature> player) {}
+//power increase
+PowerIncreaseEffect::PowerIncreaseEffect(int powerIncrease) 
+    : m_powerIncrease(powerIncrease), m_applied(false) {}
+
+void PowerIncreaseEffect::applyEffect(std::shared_ptr<PlayerCreature> player) {
+    if (!player || m_applied) return;
+    
+    player->increasePower(m_powerIncrease);
+    m_applied = true;
+    ofLogNotice() << "Power Increase! New power level: " << player->getPower();
+}
+void PowerIncreaseEffect::removeEffect(std::shared_ptr<PlayerCreature> player) {}
+//score multiplier
+ScoreMultiplierEffect::ScoreMultiplierEffect(int multiplier, int duration)
+    : m_multiplier(multiplier), m_duration(duration), m_elapsed(0), m_applied(false) {}
+
+void ScoreMultiplierEffect::applyEffect(std::shared_ptr<PlayerCreature> player) {
+    if (!player || m_applied) return;
+    
+    player->setScoreMultiplier(m_multiplier);
+    m_applied = true;
+    ofLogNotice() << "Score Multiplier x" << m_multiplier << " activated for " << m_duration << " frames!";
+}
+void ScoreMultiplierEffect::removeEffect(std::shared_ptr<PlayerCreature> player) {
+    if (player && m_applied) {
+        player->setScoreMultiplier(1);
+        ofLogNotice() << "Score Multiplier expired.";
+    }
+}
+std::shared_ptr<PowerUp> PowerUpFactory::createRandomPowerUp(float x, float y) {
+    // Randomly select a power-up type
+    PowerUpType type = static_cast<PowerUpType>(rand() % 4);
+    return createPowerUp(x, y, type);
+}
+//creating power up
+std::shared_ptr<PowerUp> PowerUpFactory::createPowerUp(float x, float y, PowerUpType type) {
+    std::unique_ptr<IPowerUpEffect> effect;
+    float radius = 15.0f;
+    
+    switch (type) {
+        case PowerUpType::SpeedBoost:
+            effect = std::make_unique<SpeedBoostEffect>(10, 300); //+10 speed for 5 seconds
+            break;
+        case PowerUpType::ExtraLife:
+            effect = std::make_unique<ExtraLifeEffect>();
+            break;
+        case PowerUpType::PowerIncrease:
+            effect = std::make_unique<PowerIncreaseEffect>(1); //+1 power level
+            break;
+        case PowerUpType::ScoreMultiplier:
+            effect = std::make_unique<ScoreMultiplierEffect>(2, 600); //2x multiplier for 10 seconds
+            break;
+    }
+    
+    return std::make_shared<PowerUp>(x, y, radius, std::move(effect));
+}
+void PlayerCreature::addPowerUpEffect(std::unique_ptr<IPowerUpEffect> effect) {
+    if (effect) {
+        effect->applyEffect(shared_from_this());
+        m_activeEffects.push_back(std::move(effect));
+        ofLogNotice() << "Power-up effect added: " << m_activeEffects.back()->getName();
+    }
+}
+void PlayerCreature::updatePowerUpEffects() {
+    for (auto& effect : m_activeEffects) {
+        effect->update();
+    }
+}
+void PlayerCreature::clearExpiredEffects() {
+    auto it = m_activeEffects.begin();
+    while (it != m_activeEffects.end()) {
+        if ((*it)->isExpired()) {
+            (*it)->removeEffect(shared_from_this());
+            ofLogNotice() << "Power-up effect expired: " << (*it)->getName();
+            it = m_activeEffects.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+void PlayerCreature::setTemporarySpeed(int speed) {
+    m_speed = speed;
+}
+void Aquarium::addPowerUp(std::shared_ptr<PowerUp> p) {
+    m_powerUps.push_back(p);
+}
+void Aquarium::drawPowerUps() const {
+    forEachActivePowerUp([](const std::shared_ptr<PowerUp>& powerUp) {
+        powerUp->draw();
+    });
+}
+void Aquarium::updatePowerUps(std::shared_ptr<PlayerCreature> player) {
+    if (!player) return;
+
+    for (auto& powerUp : m_powerUps) {
+        if (powerUp->isActive()) {
+            powerUp->update();
+        }
+    }
+
+    auto it = m_powerUps.begin();
+    while (it != m_powerUps.end()) {
+        if ((*it)->isActive() && (*it)->checkCollision(player)) {
+            ofLogNotice() << "Power-up collected! Type: " << static_cast<int>((*it)->getType());
+            (*it)->applyToPlayer(player);
+            it = m_powerUps.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+void Aquarium::spawnRandomPowerUp(float x, float y) {
+    if (rand() % 100 < 15) {
+        auto powerUp = PowerUpFactory::createRandomPowerUp(x, y);
+        addPowerUp(powerUp);
+        ofLogNotice() << "Power-up spawned at (" << x << ", " << y << ")";
+    }
+}
+void Aquarium::removeInactivePowerUps() {
+    auto it = m_powerUps.begin();
+    while (it != m_powerUps.end()) {
+        if (!(*it)->isActive()) {
+            it = m_powerUps.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }

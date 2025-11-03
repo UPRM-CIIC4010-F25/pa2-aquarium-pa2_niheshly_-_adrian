@@ -5,6 +5,11 @@
 #include <iostream>
 #include <algorithm>
 #include "Core.h"
+#include "ofMain.h"
+
+class PowerUp;
+class IPowerUpEffect;
+class PlayerCreature;
 
 
 enum class AquariumCreatureType {
@@ -44,7 +49,7 @@ class AquariumLevel : public GameLevel {
 };
 
 
-class PlayerCreature : public Creature {
+class PlayerCreature : public Creature, public std::enable_shared_from_this<PlayerCreature> {
 public:
 
     PlayerCreature(float x, float y, int speed, std::shared_ptr<GameSprite> sprite);
@@ -67,12 +72,29 @@ public:
     void loseLife(int debounce);
     void increasePower(int value) { m_power += value; }
     void reduceDamageDebounce();
+
+    //powerup
+
+    void addPowerUpEffect(std::unique_ptr<IPowerUpEffect> effect);
+    void updatePowerUpEffects();
+    void clearExpiredEffects();
+
+    int getBaseSpeed() const { return m_baseSpeed; }
+    void setTemporarySpeed(int speed);
+    int getScoreMultiplier() const { return m_scoreMultiplier; }
+    void setScoreMultiplier(int multiplier) { m_scoreMultiplier = multiplier; }
+    
+    float getRadius() const { return m_collisionRadius; }
     
 private:
     int m_score = 0;
     int m_lives = 3;
     int m_power = 1; // mark current power lvl
     int m_damage_debounce = 0; // frames to wait after eating
+
+    int m_baseSpeed;
+    int m_scoreMultiplier = 1;
+    std::vector<std::unique_ptr<IPowerUpEffect>> m_activeEffects;
 };
 
 class NPCreature : public Creature {
@@ -118,6 +140,24 @@ public:
     void setMaxPopulation(int n) { m_maxPopulation = n; }
     void Repopulate();
     void SpawnCreature(AquariumCreatureType type);
+
+    //powerups
+    void addPowerUp(std::shared_ptr<PowerUp> p);
+    void drawPowerUps() const;
+    void updatePowerUps(std::shared_ptr<PlayerCreature> player);
+    void spawnRandomPowerUp(float x, float y);
+
+    void removeInactivePowerUps();
+        template<typename Func>
+    void forEachActivePowerUp(Func func) const {
+        std::for_each(m_powerUps.begin(), m_powerUps.end(), 
+            [&func](const std::shared_ptr<PowerUp>& powerUp) {
+                if (powerUp->isActive()) {
+                    func(powerUp);
+                }
+            });
+    }
+
     
     std::shared_ptr<Creature> getCreatureAt(int index);
     int getCreatureCount() const { return m_creatures.size(); }
@@ -134,6 +174,9 @@ private:
     std::vector<std::shared_ptr<Creature>> m_next_creatures;
     std::vector<std::shared_ptr<AquariumLevel>> m_aquariumlevels;
     std::shared_ptr<AquariumSpriteManager> m_sprite_manager;
+
+    std::vector<std::shared_ptr<PowerUp>> m_powerUps;
+
 };
 
 
@@ -190,3 +233,110 @@ class Level_2 : public AquariumLevel  {
         std::vector<AquariumCreatureType> Repopulate() override;
 
 };
+enum class PowerUpType {
+    SpeedBoost,
+    ExtraLife, 
+    PowerIncrease,
+    ScoreMultiplier
+};
+class IPowerUpEffect {
+public:
+    virtual ~IPowerUpEffect() = default;
+    virtual void applyEffect(std::shared_ptr<PlayerCreature> player) = 0;
+    virtual void removeEffect(std::shared_ptr<PlayerCreature> player) = 0;
+    virtual bool isExpired() const = 0;
+    virtual void update() = 0;
+    virtual std::string getName() const = 0;
+    virtual PowerUpType getType() const = 0;
+};
+class PowerUp {
+private:
+    float m_x;
+    float m_y;
+    float m_radius;
+    bool m_active;
+    std::unique_ptr<IPowerUpEffect> m_effect;
+
+
+public:
+
+    PowerUp(float x, float y, float radius, std::unique_ptr<IPowerUpEffect> effect);
+    virtual ~PowerUp() = default;
+    
+    void draw() const;
+    void update();
+    bool checkCollision(std::shared_ptr<PlayerCreature> player) const;
+    void applyToPlayer(std::shared_ptr<PlayerCreature> player);
+
+    bool isActive() const { return m_active; }
+    float getX() const { return m_x; }
+    float getY() const { return m_y; }
+    float getRadius() const { return m_radius; }
+    PowerUpType getType() const;
+    
+    void deactivate() { m_active = false; }
+};
+class SpeedBoostEffect : public IPowerUpEffect {
+private:
+    int m_originalSpeed;
+    int m_boostAmount;
+    int m_duration;
+    int m_elapsed;
+    bool m_applied;
+    
+public:
+    SpeedBoostEffect(int boostAmount, int duration);
+    void applyEffect(std::shared_ptr<PlayerCreature> player) override;
+    void removeEffect(std::shared_ptr<PlayerCreature> player) override;
+    bool isExpired() const override { return m_elapsed >= m_duration; }
+    void update() override { if (m_applied && m_elapsed < m_duration) m_elapsed++; }
+    std::string getName() const override { return "Speed Boost"; }
+    PowerUpType getType() const override { return PowerUpType::SpeedBoost; }
+};
+
+class ExtraLifeEffect : public IPowerUpEffect {
+private:
+    bool m_applied;
+public:
+    ExtraLifeEffect();
+    void applyEffect(std::shared_ptr<PlayerCreature> player) override;
+    void removeEffect(std::shared_ptr<PlayerCreature> player) override;
+    bool isExpired() const override { return m_applied; } // Instant effect
+    void update() override {} 
+    std::string getName() const override { return "Extra Life"; }
+    PowerUpType getType() const override { return PowerUpType::ExtraLife; }
+};
+class PowerIncreaseEffect : public IPowerUpEffect {
+private:
+    int m_powerIncrease;
+    bool m_applied;
+public:
+    PowerIncreaseEffect(int powerIncrease);
+    void applyEffect(std::shared_ptr<PlayerCreature> player) override;
+    void removeEffect(std::shared_ptr<PlayerCreature> player) override;
+    bool isExpired() const override { return m_applied; } // Permanent effect
+    void update() override {} 
+    std::string getName() const override { return "Power Increase"; }
+    PowerUpType getType() const override { return PowerUpType::PowerIncrease; }
+};
+class ScoreMultiplierEffect : public IPowerUpEffect {
+private:
+    int m_multiplier;
+    int m_duration;
+    int m_elapsed;
+    bool m_applied;
+public:
+    ScoreMultiplierEffect(int multiplier, int duration);
+    void applyEffect(std::shared_ptr<PlayerCreature> player) override;
+    void removeEffect(std::shared_ptr<PlayerCreature> player) override;
+    bool isExpired() const override { return m_elapsed >= m_duration; }
+    void update() override { if (m_applied && m_elapsed < m_duration) m_elapsed++; }
+    std::string getName() const override { return "Score Multiplier"; }
+    PowerUpType getType() const override { return PowerUpType::ScoreMultiplier; }
+};
+class PowerUpFactory {
+public:
+    static std::shared_ptr<PowerUp> createRandomPowerUp(float x, float y);
+    static std::shared_ptr<PowerUp> createPowerUp(float x, float y, PowerUpType type);
+};
+
