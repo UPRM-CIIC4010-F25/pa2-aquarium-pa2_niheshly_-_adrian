@@ -22,6 +22,15 @@ void ofApp::setup(){
         std::make_shared<GameSprite>("title.png", ofGetWindowWidth(), ofGetWindowHeight())
     ));
 
+    ofSetLogLevel(OF_LOG_NOTICE);   //set default log level
+
+    // Load background ambient sound
+    if (!backgroundSound.load("underwater.mp3")) {
+        ofLogError() << "Could not load background sound underwater.mp3";
+    } else {
+        backgroundSound.setLoop(true);   //play forever
+    }
+
     //AquariumSpriteManager
     spriteManager = std::make_shared<AquariumSpriteManager>();
 
@@ -58,6 +67,17 @@ void ofApp::setup(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
+
+    string sceneName = gameManager->GetActiveSceneName();
+    if (sceneName == GameSceneKindToString(GameSceneKind::AQUARIUM_GAME)) {
+        if (!backgroundSound.isPlaying()) {
+            backgroundSound.play();   // Loop sound once
+        }
+    } else {
+        if (backgroundSound.isPlaying()) {
+            backgroundSound.stop();   // When not in game scene, stop
+        }
+    }
     
     if(gameManager->GetActiveSceneName() == GameSceneKindToString(GameSceneKind::GAME_OVER)){
         return; // Stop updating if game is over or exiting
