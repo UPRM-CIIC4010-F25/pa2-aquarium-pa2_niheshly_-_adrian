@@ -25,7 +25,7 @@ Grading
 | Student Number | Student Name | Student Email |
 |-|-|-|
 |(802218395)| (Niheshly Quiñones Franco)| (niheshly.quinones@upr.edu) |
-|(STUDENT NUMBER HERE)| (STUDENT NAME HERE)| (STUDENT EMAIL HERE) |
+|(802230421)| (Adrian J. Plaza Maldonado)| (adrian.plaza@upr.edu) |
 
 ---
 

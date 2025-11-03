@@ -241,8 +241,8 @@ void GreenFish::draw() const {
 AquariumSpriteManager::AquariumSpriteManager(){
     this->m_npc_fish = std::make_shared<GameSprite>("base-fish.png", 70,70);
     this->m_big_fish = std::make_shared<GameSprite>("bigger-fish.png", 120, 120);
-    this->m_purple_fish = std::make_shared<GameSprite>("base-fish.png", 85, 85); // change :) !!
-    this->m_green_fish = std::make_shared<GameSprite>("base-fish.png", 80, 80); // tmbn!
+    this->m_purple_fish = std::make_shared<GameSprite>("purple-fish.png", 85, 85);
+    this->m_green_fish = std::make_shared<GameSprite>("green-fish.png", 80, 80); 
 }
 
 std::shared_ptr<GameSprite> AquariumSpriteManager::GetSprite(AquariumCreatureType t){
@@ -333,6 +333,7 @@ void Aquarium::SpawnCreature(AquariumCreatureType type) {
             break;
         case AquariumCreatureType::GreenFish:
             this->addCreature(std::make_shared<GreenFish>(x, y, speed, this->m_sprite_manager->GetSprite(AquariumCreatureType::GreenFish)));
+            break;
         default:
             ofLogError() << "Unknown creature type to spawn!";
             break;
